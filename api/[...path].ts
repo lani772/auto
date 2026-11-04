@@ -33,7 +33,41 @@ export default async function handler(req:any,res:any) {
   if(path==='admin/subscribers'&&method==='GET')return send(res,await sql`SELECT id,email,name,status,created_at AS "createdAt" FROM newsletter_subscribers ORDER BY created_at DESC LIMIT 500`);
   if(path==='admin/messages'&&method==='GET')return send(res,await sql`SELECT id,name,email,subject,message,status,created_at AS "createdAt" FROM contact_messages ORDER BY created_at DESC LIMIT 500`);
   const msg=path.match(/^admin\/messages\/([^/]+)\/resolve$/);if(msg&&method==='POST'){await sql`UPDATE contact_messages SET status='resolved',updated_at=now() WHERE id=${msg[1]}`;return send(res,{ok:true});}
-  if(path.startsWith('admin/ai/'))return send(res,{error:'AI provider is not configured. Connect an approved provider to enable this feature.'},503);
+async function aiCompletion(messages:any[],jsonMode=false) {
+  const token=process.env.NEON_AI_GATEWAY_TOKEN, base=process.env.NEON_AI_GATEWAY_BASE_URL, model=process.env.AI_MODEL||'gpt-5-mini';
+  if(!token||!base)throw new Error('AI gateway is not configured');
+  const response=await fetch(base.replace(/\\/$/,'')+'/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({model,messages,max_completion_tokens:1800,...(jsonMode?{response_format:{type:'json_object'}}:{})})});
+  if(!response.ok)throw new Error('AI gateway request failed');
+  const result=await response.json() as any;
+  const content=result?.choices?.[0]?.message?.content;
+  if(typeof content!=='string'||!content.trim())throw new Error('AI gateway returned an empty response');
+  return content;
+}
+  if(path==='admin/ai/article-draft'&&method==='POST'){
+    const b=body(req),topic=clean(b.topic,240);
+    if(topic.length<4)return send(res,{error:'Enter an article topic with at least four characters.'},400);
+    try {
+      const raw=await aiCompletion([
+        {role:'system',content:'You are the editorial assistant for AdEarn, a practical knowledge publication. Create accurate, useful article drafts. Never invent sources, statistics, quotations, or claims of verification. If a fact may be uncertain, phrase it cautiously and flag it for human review. Return valid JSON only with keys: title, description, category, readingTime, imageAlt, seoTitle, metaDescription, keywords (array of strings), body (array of 5 to 8 substantial paragraphs). Do not publish content.'},
+        {role:'user',content:JSON.stringify({topic,audience:clean(b.audience,120)||'general readers',tone:clean(b.tone,120)||'clear and engaging',keywords:clean(b.keywords,500)})}
+      ],true);
+      let draft:any;try{draft=JSON.parse(raw);}catch{throw new Error('AI returned invalid structured content');}
+      if(typeof draft.title!=='string'||typeof draft.description!=='string'||!Array.isArray(draft.body))throw new Error('AI returned incomplete article fields');
+      return send(res,{title:draft.title,description:draft.description,category:clean(draft.category,80)||'General',readingTime:Math.min(120,Math.max(1,Number(draft.readingTime)||4)),imageAlt:clean(draft.imageAlt,300),seoTitle:clean(draft.seoTitle,200),metaDescription:clean(draft.metaDescription,320),keywords:Array.isArray(draft.keywords)?draft.keywords.filter((x:any)=>typeof x==='string').slice(0,12):[],body:draft.body.filter((x:any)=>typeof x==='string').slice(0,10)});
+    } catch(error) { console.error('AdEarn AI draft failed',error);return send(res,{error:'AI drafting is temporarily unavailable. Please retry shortly.'},502); }
+  }
+  if(path==='admin/ai/optimize'&&method==='POST'){
+    const b=body(req),title=clean(b.title,200),description=clean(b.description,1000),paragraphs=Array.isArray(b.body)?b.body.filter((x:any)=>typeof x==='string').slice(0,12).map((x:string)=>x.slice(0,5000)): [];
+    if(!title||!paragraphs.length)return send(res,{error:'Add a title and article text before requesting a review.'},400);
+    try {
+      const review=await aiCompletion([
+        {role:'system',content:'You are a careful editorial and SEO reviewer. Review the supplied article without rewriting unsupported facts as true. Return concise plain text with headings: Accuracy and fact-check flags; Clarity and structure; SEO improvements; Accessibility and readability; Priority edits. Do not claim you checked external sources.'},
+        {role:'user',content:JSON.stringify({title,description,body:paragraphs})}
+      ]);
+      return send(res,{review});
+    } catch(error) { console.error('AdEarn AI review failed',error);return send(res,{error:'AI review is temporarily unavailable. Please retry shortly.'},502); }
+  }
+
   if(path==='admin/articles'&&method==='POST'){const b=body(req),title=clean(b.title,200);if(!title)return send(res,{error:'Title is required.'},400);const slug=slugify(clean(b.slug,100)||title),status=b.status==='published'?'published':'draft';const rows=await sql`INSERT INTO articles(id,slug,title,description,category,author,published_at,reading_time,image,image_alt,featured,status,body,created_at,updated_at) VALUES(${slug},${slug},${title},${clean(b.description)},${clean(b.category,80)},${clean(b.author,120)},CURRENT_DATE,${Math.min(120,Math.max(1,Number(b.readingTime)||3))},${clean(b.image,1000)},${clean(b.imageAlt,300)},${b.featured===true},${status},${JSON.stringify(Array.isArray(b.body)?b.body:[])}::jsonb,now(),now()) ON CONFLICT(slug) DO NOTHING RETURNING *`;return rows.length?send(res,article(rows[0]),201):send(res,{error:'An article with this title or slug already exists.'},409);}
   const art=path.match(/^admin\/articles\/([^/]+)$/);
   if(art&&method==='PUT'){const b=body(req),status=b.status==='published'?'published':'draft';const rows=await sql`UPDATE articles SET title=${clean(b.title,200)},description=${clean(b.description)},category=${clean(b.category,80)},author=${clean(b.author,120)},reading_time=${Math.min(120,Math.max(1,Number(b.readingTime)||3))},image=${clean(b.image,1000)},image_alt=${clean(b.imageAlt,300)},featured=${b.featured===true},status=${status},body=${JSON.stringify(Array.isArray(b.body)?b.body:[])}::jsonb,updated_at=now() WHERE slug=${art[1]} RETURNING *`;return rows.length?send(res,article(rows[0])):send(res,{error:'Article not found.'},404);}
