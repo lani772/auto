@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api, auth } from '@appdeploy/client';
+import { api, auth } from './api';
 import { ArrowLeft, ArrowRight, Bookmark, BookOpen, Search, Sparkles, LayoutDashboard, LogIn, LogOut, Plus, Trash2, CheckCircle2, Share2 } from 'lucide-react';
 
 type Article = { slug:string; title:string; description:string; category:string; author:string; publishedAt:string; readingTime:number; image:string; imageAlt:string; featured?:boolean; body:string[]; status?:'published'|'draft' };
