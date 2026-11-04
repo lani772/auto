@@ -2,7 +2,7 @@ import { createAuthClient } from '@neondatabase/auth';
 
 export const neonAuth = createAuthClient(import.meta.env.VITE_NEON_AUTH_URL);
 
-async function bearerHeaders() {
+async function bearerHeaders(): Promise<Record<string, string>> {
   try {
     const result = await neonAuth.token();
     const token = result?.data?.token;
