@@ -11,7 +11,6 @@ const emptyArticle = { title:'', description:'', category:'Technology', author:'
 function readSaved():string[] { try { const v:unknown=JSON.parse(localStorage.getItem(savedKey)??'[]'); return Array.isArray(v)?v.filter((x):x is string=>typeof x==='string'):[]; } catch { return []; } }
 function AdUnit({client,slot,label,mode='live',enabled=true}:{client:string;slot:string;label:string;mode?:'simulation'|'live';enabled?:boolean}) {
   const valid = /^ca-pub-\d+$/.test(client) && /^\d{5,20}$/.test(slot);
-  if (!enabled) return null;
   useEffect(() => {
     if (mode!=='live' || !valid) return;
     const scriptId='adearn-adsense-script';
@@ -19,6 +18,7 @@ function AdUnit({client,slot,label,mode='live',enabled=true}:{client:string;slot
     const timer=window.setTimeout(()=>{ try { (window as Window & {adsbygoogle?:unknown[]}).adsbygoogle = (window as Window & {adsbygoogle?:unknown[]}).adsbygoogle || []; (window as Window & {adsbygoogle:unknown[]}).adsbygoogle.push({}); } catch { /* AdSense may be unavailable or blocked. */ } },300);
     return ()=>window.clearTimeout(timer);
   },[client,slot,mode,valid]);
+  if (!enabled) return null;
   return <div className="ad-wrap"><span>{label.toUpperCase()} · ADVERTISEMENT</span>{mode==='simulation'?<div className="sim-ad sim-ad-display"><div className="sim-ad-top"><span className="sim-ad-mark">Ad</span><span>Google AdSense · AdEarn test preview</span></div><div className="sim-ad-content"><div><strong>Google AdSense placement preview</strong><p>This sample represents the space reserved for a Google-served advertisement. Google selects the advertiser and creative after approval and delivery.</p><small>Test preview only · Not a real Google ad</small></div><div className="sim-ad-visual">Ad</div></div><span className="sim-ad-disclaimer">SIMULATION — no Google request, impression, click or revenue is generated</span></div>:valid?<ins className="adsbygoogle ad-ins" style={{display:'block'}} data-ad-client={client} data-ad-slot={slot} data-ad-format="auto" data-full-width-responsive="true" />:<div className="ad-placeholder">Enter a valid Google AdSense publisher ID and ad unit ID, and ensure your site is approved by Google.</div>}</div>;
 }
 
@@ -33,6 +33,10 @@ export default function App() {
   const [errorMessage,setErrorMessage]=useState('');
   const [config,setConfig]=useState<Config>({siteName:'AdEarn',adsEnabled:false,adsMode:'simulation',creativeType:'display',adsenseClientId:'',adSlots:{}});
   const [user,setUser]=useState<any>(null);
+  const [authEmail,setAuthEmail]=useState('');
+  const [authPassword,setAuthPassword]=useState('');
+  const [authName,setAuthName]=useState('');
+  const [authMode,setAuthMode]=useState<'signin'|'signup'>('signin');
   const [adminMode,setAdminMode]=useState(false);
   const [adminArticles,setAdminArticles]=useState<Article[]>([]);
   const [stats,setStats]=useState<Record<string,number>>({});
@@ -114,7 +118,7 @@ export default function App() {
     }catch(e){if(e instanceof Error&&e.name!=='AbortError')window.alert('Could not share this article.');}
   }
   async function subscribe(e:React.FormEvent){e.preventDefault();setNewsletterState('');try{await api.post('/api/newsletter',{email:newsletterEmail});setNewsletterState('You are subscribed. Thank you!');setNewsletterEmail('');}catch{setNewsletterState('Subscription failed. Please check your email and try again.');}}
-  async function signIn(){try{await auth.signInWithRedirect();}catch(e){setNotice(e instanceof Error?e.message:'Sign-in could not start. Please retry.');}}
+  async function signIn(e:React.FormEvent){e.preventDefault();setBusy(true);setNotice('');try{if(authMode==='signup'){await auth.signUp(authName,authEmail,authPassword);const current=await auth.getUser();setUser(current);setNotice(current?'Account created and signed in.':'Account created. If email verification is enabled, verify your email and then sign in.');}else{await auth.signIn(authEmail,authPassword);setUser(await auth.getUser());setNotice('Signed in successfully.');}setAuthPassword('');}catch(e){setNotice(e instanceof Error?e.message:'Authentication failed. Please retry.');}finally{setBusy(false);}}
   async function signOut(){await auth.signOut();setUser(null);setAdminMode(false);}
   async function generateAiDraft(e:React.FormEvent){
     e.preventDefault();setAiBusy(true);setAiReview('');setNotice('');
@@ -171,9 +175,14 @@ export default function App() {
     </header>
 
     {adminMode ? <main className="admin-shell">
-      <div className="admin-heading"><div><span className="eyebrow">PUBLISHER WORKSPACE</span><h1>AdEarn Admin</h1><p>Manage content, audience and advertising configuration.</p></div>{user?<button className="outline-button" onClick={signOut}><LogOut size={15}/> Sign out</button>:<button className="primary-button" onClick={signIn}><LogIn size={16}/> Sign in</button>}</div>
+      <div className="admin-heading"><div><span className="eyebrow">PUBLISHER WORKSPACE</span><h1>AdEarn Admin</h1><p>Manage content, audience and advertising configuration.</p></div>{user?<button className="outline-button" onClick={signOut}><LogOut size={15}/> Sign out</button>:null}</div>
       {notice&&<div className="notice" role="status">{notice}</div>}
-      {!user?<div className="admin-gate"><BookOpen size={28}/><h2>Sign in to manage your publication</h2><p>Only the configured site administrator can access publishing and advertising controls.</p><button className="primary-button" onClick={signIn}>Continue with secure sign-in <ArrowRight size={16}/></button></div>:<>
+      {!user?<div className="admin-gate"><BookOpen size={28}/><h2>{authMode==='signin'?'Sign in to manage your publication':'Create your administrator account'}</h2><p>Use the administrator email configured for this publication. Only allowlisted accounts can access publishing controls.</p><form className="admin-form" onSubmit={signIn}>
+        {authMode==='signup'&&<label>Your name<input autoComplete="name" required value={authName} onChange={e=>setAuthName(e.target.value)}/></label>}
+        <label>Email address<input type="email" autoComplete="email" required value={authEmail} onChange={e=>setAuthEmail(e.target.value)}/></label>
+        <label>Password<input type="password" autoComplete={authMode==='signin'?'current-password':'new-password'} minLength={8} required value={authPassword} onChange={e=>setAuthPassword(e.target.value)}/></label>
+        <button className="primary-button" disabled={busy}>{busy?'Please wait…':authMode==='signin'?'Sign in securely':'Create account'} <ArrowRight size={16}/></button>
+      </form><button className="text-button" type="button" onClick={()=>{setAuthMode(authMode==='signin'?'signup':'signin');setNotice('');}}>{authMode==='signin'?'First time? Create an account':'Already registered? Sign in'}</button></div>:<>
         <div className="stat-grid">{[['Articles',stats.articles||0],['Published',stats.published||0],['Subscribers',stats.subscribers||0],['Page views',stats.pageViews||0]].map(([k,v])=><div className="stat-card" key={String(k)}><span>{k}</span><strong>{Number(v).toLocaleString()}</strong></div>)}</div>
         <div className="admin-tabs"><button className={adminTab==='articles'?'selected':''} onClick={()=>setAdminTab('articles')}>Articles</button><button className={adminTab==='ai'?'selected':''} onClick={()=>setAdminTab('ai')}><Sparkles size={14}/> AI Studio</button><button className={adminTab==='ads'?'selected':''} onClick={()=>setAdminTab('ads')}>Advertising</button><button className={adminTab==='audience'?'selected':''} onClick={()=>setAdminTab('audience')}>Audience</button></div>
         {adminTab==='articles'&&<div className="admin-grid"><section className="admin-panel"><h2>{editing?'Edit article':'Create article'}</h2><form className="admin-form" onSubmit={saveArticle}>
