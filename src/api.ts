@@ -3,9 +3,14 @@ import { createAuthClient } from '@neondatabase/auth';
 export const neonAuth = createAuthClient(import.meta.env.VITE_NEON_AUTH_URL);
 
 async function bearerHeaders() {
-  const result = await neonAuth.token();
-  const token = result?.data?.token;
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  try {
+    const result = await neonAuth.token();
+    const token = result?.data?.token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    // Public API requests must work when no user is signed in.
+    return {};
+  }
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<{ data: T }> {
@@ -28,14 +33,15 @@ export const auth = {
     const result = await neonAuth.getSession();
     return result?.data?.user ?? null;
   },
-  async signInWithRedirect() {
-    const email = window.prompt('Administrator email');
-    if (!email) return;
-    const password = window.prompt('Password');
-    if (!password) return;
+  async signIn(email: string, password: string) {
     const result = await neonAuth.signIn.email({ email, password });
     if (result?.error) throw new Error(result.error.message || 'Sign-in failed');
-    window.location.reload();
+    return result;
+  },
+  async signUp(name: string, email: string, password: string) {
+    const result = await neonAuth.signUp.email({ name, email, password });
+    if (result?.error) throw new Error(result.error.message || 'Account creation failed');
+    return result;
   },
   async signOut() { await neonAuth.signOut(); },
 };
