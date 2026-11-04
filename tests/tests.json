@@ -1,0 +1,126 @@
+[
+  {
+    "name": "Public reading experience, search and shareable articles",
+    "sanity": true,
+    "viewport": "desktop",
+    "covers": [
+      "API health",
+      "persistent article seed",
+      "article feed",
+      "search and categories",
+      "article query deep links",
+      "dynamic SEO metadata",
+      "share action",
+      "mobile layout"
+    ],
+    "description": "Checks the core public reading experience from feed through opening and sharing a story.",
+    "steps": [
+      "Open the AdEarn homepage",
+      "Wait for stories to load",
+      "Search for renewable and select Technology",
+      "Open a story and verify the title and description update",
+      "Use Share story and open the resulting article URL in a new tab"
+    ],
+    "expected": "Published stories load, filters work, and a shared article URL opens the correct story with dynamic page metadata."
+  },
+  {
+    "name": "Secure publisher CMS and AI editorial studio",
+    "viewport": "desktop",
+    "covers": [
+      "AppDeploy sign-in restoration",
+      "admin email allowlist",
+      "protected admin APIs",
+      "article create/update/delete",
+      "database persistence",
+      "AI article generation",
+      "unpublished draft review",
+      "SEO content review"
+    ],
+    "description": "Checks only the allowlisted publisher can manage articles and use the AI drafting and optimization tools.",
+    "steps": [
+      "Open Admin while signed out and verify the sign-in gate",
+      "Sign in with the configured administrator email",
+      "Create and edit a draft article, then verify it persists",
+      "Open AI Studio and generate a draft from a topic",
+      "Move the AI draft into the editor and verify it is not auto-published",
+      "Run the editorial review on the article",
+      "Delete the test article"
+    ],
+    "expected": "Admin APIs remain protected; content persists; AI returns an editable draft and never publishes automatically."
+  },
+  {
+    "name": "AdSense configuration and placement compliance",
+    "viewport": "desktop",
+    "covers": [
+      "publisher ID validation",
+      "ad unit validation",
+      "simulation and live display modes",
+      "Google AdSense is the only configured advertising provider",
+      "test preview clearly distinguished from real Google-served ads",
+      "live Google responsive ad unit integration",
+      "live ad activation requires valid publisher and ad unit IDs",
+      "disabled placements do not load ad units",
+      "header, in-article and footer placements",
+      "clear advertisement labels",
+      "no forced clicks or incentivized traffic"
+    ],
+    "description": "Checks the publisher can configure valid ad placement IDs and that incomplete configuration does not activate ads.",
+    "steps": [
+      "Open Admin and sign in",
+      "Open Advertising",
+      "Select Simulation mode and enable ad placements",
+      "Inspect the clearly labelled Google AdSense test preview and verify it is not presented as a real advertiser campaign",
+      "Try to enable live mode without valid Google IDs and verify the server rejects the configuration",
+      "Enter a valid Google AdSense publisher ID and at least one ad unit ID, enable Live mode and save",
+      "Return to Discover and inspect the configured labelled placements"
+    ],
+    "expected":      "AdEarn exposes Google AdSense only; test previews are explicitly non-advertising placeholders with no Google request or revenue, live mode rejects invalid IDs, and eligible live placements request Google AdSense responsive units only."
+  },
+  {
+    "name": "Newsletter and audience management",
+    "viewport": "mobile",
+    "covers": [
+      "newsletter validation",
+      "subscriber persistence",
+      "subscriber list",
+      "CSV export",
+      "contact message inbox",
+      "resolve contact message",
+      "reading list persistence"
+    ],
+    "description": "Checks visitors can subscribe and save stories, while the administrator can manage subscriber and contact records.",
+    "steps": [
+      "Subscribe using a valid email",
+      "Save a story and refresh the reading list",
+      "Sign in as administrator and open Audience",
+      "Review subscribers and export CSV",
+      "Resolve a test contact message"
+    ],
+    "expected": "Newsletter and reading-list actions persist; subscriber and message records are visible only to the administrator."
+  },
+  {
+    "name": "Graceful handling of API failures",
+    "viewport": "desktop",
+    "covers": [
+      "public API failure state",
+      "visible retry",
+      "newsletter server validation",
+      "resilient UI"
+    ],
+    "description": "Checks API errors are visible and do not crash the publication.",
+    "qa_faults": [
+      {
+        "method": "GET",
+        "path": "/api/articles",
+        "status": 500,
+        "body_json": {
+          "error": "simulated_failure"
+        }
+      }
+    ],
+    "steps": [
+      "Open the homepage while the article API failure is injected"
+    ],
+    "expected": "A clear error message and Try again control are shown instead of a blank page."
+  }
+]
