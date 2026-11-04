@@ -17,8 +17,8 @@ async function isAdmin(req:Request) {
 export default async function handler(req:Request) {
  try {
   const u=new URL(req.url), p=u.pathname.replace(/^\/api\/?/,'').replace(/\/$/,''), m=req.method.toUpperCase();
-  if(p==='health'&&m==='GET')return json({status:'ok',service:'adearn-api',database:'neon-postgres'});
-  if(p==='articles'&&m==='GET'){const rows=await sql`SELECT * FROM articles WHERE status='published' ORDER BY published_at DESC NULLS LAST LIMIT 100`;return json({items:rows.map(mapArticle)});}
+  if(p==='health'&&m==='GET')return send({status:'ok',service:'adearn-api',database:'neon-postgres'});
+  if(p==='articles'&&m==='GET'){const rows=await sql`SELECT * FROM articles WHERE status='published' ORDER BY published_at DESC NULLS LAST LIMIT 100`;return send({items:rows.map(mapArticle)});}
   if(p==='public-config'&&m==='GET'){const rows=await sql`SELECT * FROM site_settings WHERE id='main' LIMIT 1`;const s:any=rows[0]||{};return json({siteName:'AdEarn',adsEnabled:s.ads_enabled===true,adsMode:s.ads_mode||'simulation',creativeType:'display',adsenseClientId:s.adsense_client_id||'',adSlots:s.ad_slots||{}});}
   if(p==='analytics/pageview'&&m==='POST'){const d=new Date().toISOString().slice(0,10);await sql`INSERT INTO daily_analytics(date,views,updated_at) VALUES(${d},1,now()) ON CONFLICT(date) DO UPDATE SET views=daily_analytics.views+1,updated_at=now()`;return json({ok:true});}
   if(p==='newsletter'&&m==='POST'){const b=await readBody(req),email=clean(b.email,320).toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return json({error:'Enter a valid email address.'},400);await sql`INSERT INTO newsletter_subscribers(email,status) VALUES(${email},'active') ON CONFLICT(email) DO UPDATE SET status='active'`;return json({ok:true});}
